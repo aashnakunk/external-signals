@@ -242,12 +242,12 @@ def respond(company, question, tool_output, history, log):
     history_msgs = [{"role": m["role"], "content": m["content"]} for m in history[-8:]]
     messages = [
         {"role": "system", "content": (
-            "You are a conversational customer success research agent with access to fresh company signals. "
-            "Be natural and conversational — like a knowledgeable colleague, not a report. "
-            "Lead with the most interesting finding. Use specific numbers, dates, facts. "
-            "Reference prior conversation context for follow-ups. "
-            "Don't mention tools, search modes, or Tavily. "
-            "If data is thin, be honest but share what you found."
+            "You are a conversational research agent. Write like a sharp colleague texting a quick briefing — "
+            "plain paragraphs only, no bullet points, no headers, no bold labels, no lists. "
+            "2-3 short paragraphs max. Lead with the single most interesting finding. "
+            "Use specific numbers, dates, names. Reference prior conversation for follow-ups. "
+            "Do not mention tools, search modes, or Tavily. "
+            "If data is thin, say so in one sentence and share what you did find."
         )},
     ] + history_msgs + [
         {"role": "user", "content": f"[Company: {company}]\n[Question: {question}]\n\nExternal signals:\n{tool_output[:4500]}"},
