@@ -259,12 +259,12 @@ def respond(company, question, tool_output, history, log):
 
 # ── sample questions ──────────────────────────────────────────────────────────
 SAMPLE_QUESTIONS = [
-    ("Datadog",  "Tell me more about recent announcements or interviews Olivier Pomel has given on their AI strategy"),
-    ("Clari",    "Tell me more about their product announcements in April 2026"),
-    ("Boomi",    "Give me more details about key partnerships Steve Lucas has emphasized"),
-    ("Figma",    "Which markets are driving their international growth?"),
-    ("Notion",   "Give me more detail about their new enterprise features"),
-    ("Gong",     "I want to better understand AI Deep Researcher"),
+    ("Datadog",  "What has Datadog's CEO Olivier Pomel said recently about their AI strategy?"),
+    ("Clari",    "What product announcements did Clari make in April 2026?"),
+    ("Boomi",    "What key partnerships has Boomi's CEO Steve Lucas been emphasizing?"),
+    ("Figma",    "Which markets are driving Figma's international growth?"),
+    ("Notion",   "What are Notion's new enterprise features?"),
+    ("Gong",     "Can you explain Gong's AI Deep Researcher feature?"),
 ]
 
 # ── session state ─────────────────────────────────────────────────────────────
