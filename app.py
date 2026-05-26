@@ -65,23 +65,22 @@ st.markdown("""
 # ── header ────────────────────────────────────────────────────────────────────
 st.markdown("# External Signals — Test Agent")
 st.markdown(
-    '<div class="subtitle">Property of QuadSci</div>',
+    '<div class="subtitle">'
+    'Property of QuadSci'
+    '&nbsp;&nbsp;'
+    '<span style="color:#30363d">|</span>'
+    '&nbsp;&nbsp;'
+    '<span style="color:#484f58;font-size:0.7rem;cursor:pointer" title="'
+    'Search: Tavily web search API — basic (1 credit) for specific questions, advanced (2 credits/query) for open-ended. '
+    'Routing: GPT-5.4 decides search mode. '
+    'Response: GPT-5.4 synthesizes results. '
+    'Flow: identify company → search → respond. History kept for follow-ups. '
+    'Test agent — results from public web data only.">'
+    'ℹ️ info'
+    '</span>'
+    '</div>',
     unsafe_allow_html=True,
 )
-with st.expander("ℹ️ Info"):
-    st.markdown(
-        """
-**Model stack**
-- **Search:** Tavily web search API — basic depth (1 credit) for specific questions, advanced depth (2 credits/query) for open-ended research
-- **Routing:** GPT-5.4 decides whether to run a focused or broad search based on your question
-- **Response:** GPT-5.4 synthesizes search results into a conversational answer
-
-**How it works**
-Each question goes through three steps: identify the company → search the web for recent signals → generate a response. Conversation history is kept so follow-ups work naturally.
-
-**This is a test agent.** Results are sourced from public web data via Tavily and may not be exhaustive.
-        """
-    )
 
 # ── clients ───────────────────────────────────────────────────────────────────
 @st.cache_resource
