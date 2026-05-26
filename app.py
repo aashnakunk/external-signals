@@ -13,7 +13,6 @@ load_dotenv("/Users/aashnakunkolienker/projects/fastapi-qchat-quadsci/.env")
 from openai import OpenAI
 from tavily import TavilyClient
 
-# ── page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="External Signals · QuadSci",
     page_icon="🔍",
@@ -27,15 +26,13 @@ st.markdown("""
 
   h1 { color: #58a6ff !important; font-family: 'SF Mono', monospace !important;
        font-size: 1.15rem !important; letter-spacing: 0.04em; margin-bottom: 0 !important; }
-  .subtitle { color: #8b949e; font-family: monospace; font-size: 0.76rem; margin-bottom: 1.5rem; }
+  .subtitle { color: #8b949e; font-family: monospace; font-size: 0.76rem; margin-bottom: 0.25rem; }
 
-  /* hide default avatars */
   [data-testid="chatAvatarIcon-user"] svg,
   [data-testid="chatAvatarIcon-user"] img,
   [data-testid="chatAvatarIcon-assistant"] svg,
   [data-testid="chatAvatarIcon-assistant"] img { display: none !important; }
 
-  /* text labels instead */
   [data-testid="chatAvatarIcon-user"]::after {
     content: "you"; color: #58a6ff;
     font-family: 'SF Mono', monospace; font-size: 0.75rem; font-weight: 600;
@@ -45,23 +42,19 @@ st.markdown("""
     font-family: 'SF Mono', monospace; font-size: 0.75rem; font-weight: 600;
   }
 
-  /* user bubble */
   [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) .stMarkdown p {
     color: #e6edf3; font-family: 'SF Mono', monospace; font-size: 0.87rem;
     background: #161b22; border-left: 2px solid #58a6ff;
     padding: 0.5rem 0.75rem; border-radius: 0 6px 6px 0;
   }
 
-  /* agent bubble */
   [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-assistant"]) .stMarkdown p {
     color: #cdd9e5; font-size: 0.9rem; line-height: 1.68;
   }
 
-  /* meta line */
   .meta { color: #484f58; font-family: monospace; font-size: 0.7rem;
           margin-top: -0.4rem; margin-bottom: 0.6rem; }
 
-  /* status/log box */
   [data-testid="stStatus"] { background: #161b22 !important; border: 1px solid #21262d !important; }
   [data-testid="stStatus"] p, [data-testid="stStatus"] li {
     font-family: 'SF Mono', monospace !important; font-size: 0.75rem !important; color: #8b949e !important;
@@ -80,23 +73,20 @@ st.markdown("""
 
 # ── header ────────────────────────────────────────────────────────────────────
 st.markdown("# External Signals — Test Agent")
-st.markdown(
-    '<div class="subtitle">'
-    'Property of QuadSci'
-    '&nbsp;&nbsp;'
-    '<span style="color:#30363d">|</span>'
-    '&nbsp;&nbsp;'
-    '<span style="color:#484f58;font-size:0.7rem;cursor:pointer" title="'
-    'Search: Tavily web search API — basic (1 credit) for specific questions, advanced (2 credits/query) for open-ended. '
-    'Routing: GPT-5.4 decides search mode. '
-    'Response: GPT-5.4 synthesizes results. '
-    'Flow: identify company → search → respond. History kept for follow-ups. '
-    'Test agent — results from public web data only.">'
-    'ℹ️ info'
-    '</span>'
-    '</div>',
-    unsafe_allow_html=True,
-)
+col1, col2 = st.columns([8, 1])
+with col1:
+    st.markdown('<div class="subtitle">Property of QuadSci</div>', unsafe_allow_html=True)
+with col2:
+    with st.popover("ℹ️ info"):
+        st.markdown(
+            "**Search:** Tavily web search — basic (1 credit) for specific questions, "
+            "advanced (2 credits/query) for open-ended.\n\n"
+            "**Routing:** GPT-5.4 decides search mode based on your question.\n\n"
+            "**Response:** GPT-5.4 synthesizes results through a CS lens.\n\n"
+            "**Flow:** identify company → search → respond. "
+            "History is kept so follow-ups work naturally.\n\n"
+            "_Test agent — results from public web data only._"
+        )
 
 # ── clients ───────────────────────────────────────────────────────────────────
 @st.cache_resource
@@ -159,13 +149,7 @@ def _fmt(resp):
     return "\n\n".join(parts)
 
 def run_search(company, search_mode, topic, growth_context, log):
-    """
-    Returns (tool_output, total_credits, log_lines).
-    basic  = 1 credit/query  (targeted mode, 1 query)
-    advanced = 2 credits/query (broad mode, 2 parallel queries)
-    """
     years = _year_window()
-    total_credits = 0
 
     if search_mode == "basic" and topic:
         query = f'"{company}" {topic} {years}'
@@ -173,32 +157,50 @@ def run_search(company, search_mode, topic, growth_context, log):
         t0 = time.time()
         resp = _search(query, "basic", max_results=6)
         elapsed = time.time() - t0
-        n = len(resp.get("results", []))
-        total_credits = 1
-        log.write(f"{n} results · 1 credit · {elapsed:.1f}s")
-        return _fmt(resp), total_credits
+        log.write(f"{len(resp.get('results', []))} results · 1 credit · {elapsed:.1f}s")
+        return _fmt(resp), 1
 
-    else:
-        query_set = pick_query_set(growth_context)
-        queries = [(lbl, tmpl.format(company=company, years=years)) for lbl, tmpl in query_set.items()]
-        log.write(f"advanced search · {len(queries)} parallel queries")
-        t0 = time.time()
-        with ThreadPoolExecutor(max_workers=2) as ex:
-            futures = [ex.submit(_search, q, "advanced", 4) for _, q in queries]
-            responses = [f.result() for f in futures]
-        elapsed = time.time() - t0
-        total_credits = len(queries) * 2
-        total_results = sum(len(r.get("results", [])) for r in responses)
-        log.write(f"{total_results} results · {total_credits} credits · {elapsed:.1f}s")
+    query_set = pick_query_set(growth_context)
+    queries = [(lbl, tmpl.format(company=company, years=years)) for lbl, tmpl in query_set.items()]
+    log.write(f"advanced search · {len(queries)} parallel queries")
+    t0 = time.time()
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        futures = [ex.submit(_search, q, "advanced", 4) for _, q in queries]
+        responses = [f.result() for f in futures]
+    elapsed = time.time() - t0
+    credits = len(queries) * 2
+    total_results = sum(len(r.get("results", [])) for r in responses)
+    log.write(f"{total_results} results · {credits} credits · {elapsed:.1f}s")
 
-        sections = []
-        for (lbl, _), r in zip(queries, responses):
-            fmt = _fmt(r)
-            if fmt:
-                sections.append(f"── {lbl.replace('_', ' ').title()} ──\n{fmt}")
-        return "\n\n".join(sections), total_credits
+    sections = [
+        f"── {lbl.replace('_', ' ').title()} ──\n{_fmt(r)}"
+        for (lbl, _), r in zip(queries, responses)
+        if _fmt(r)
+    ]
+    return "\n\n".join(sections), credits
 
 # ── LLM calls ────────────────────────────────────────────────────────────────
+def extract_company(question, history, log):
+    history_txt = "\n".join(
+        f"{'User' if m['role']=='user' else 'Agent'}: {m['content'][:300]}"
+        for m in history[-4:]
+    )
+    log.write("identifying company...")
+    resp = llm.chat.completions.create(
+        model=LLM_MODEL, temperature=0,
+        messages=[
+            {"role": "system", "content": (
+                "Extract the company the user is asking about. "
+                "If it's a follow-up with no new company named, infer from conversation. "
+                "Reply with ONLY the company name. If truly unknown reply 'Unknown'."
+            )},
+            {"role": "user", "content": f"Question: {question}\n\nConversation:\n{history_txt}"},
+        ],
+    )
+    company = resp.choices[0].message.content.strip()
+    log.write(company)
+    return company
+
 def decide(company, question, history, log):
     history_txt = "\n".join(
         f"{'User' if m['role']=='user' else 'Agent'}: {m['content'][:200]}"
@@ -223,32 +225,8 @@ def decide(company, question, history, log):
         d = json.loads(raw)
     except json.JSONDecodeError:
         d = {"search_mode": "advanced", "topic": "", "growth_context": "Unknown"}
-    mode = d.get("search_mode", "advanced")
-    topic = d.get("topic", "")
-    gc = d.get("growth_context", "Unknown")
-    log.write(f"mode: {mode} · topic: {topic or '—'}")
+    log.write(f"mode: {d.get('search_mode', 'advanced')} · topic: {d.get('topic') or '—'}")
     return d
-
-def extract_company(question, history, log):
-    history_txt = "\n".join(
-        f"{'User' if m['role']=='user' else 'Agent'}: {m['content'][:300]}"
-        for m in history[-4:]
-    )
-    log.write("identifying company...")
-    resp = llm.chat.completions.create(
-        model=LLM_MODEL, temperature=0,
-        messages=[
-            {"role": "system", "content": (
-                "Extract the company the user is asking about. "
-                "If it's a follow-up with no new company named, infer from conversation. "
-                "Reply with ONLY the company name. If truly unknown reply 'Unknown'."
-            )},
-            {"role": "user", "content": f"Question: {question}\n\nConversation:\n{history_txt}"},
-        ],
-    )
-    company = resp.choices[0].message.content.strip()
-    log.write(company)
-    return company
 
 def respond(company, question, tool_output, history, log):
     log.write("generating response...")
@@ -274,12 +252,12 @@ def respond(company, question, tool_output, history, log):
 
 # ── sample questions ──────────────────────────────────────────────────────────
 SAMPLE_QUESTIONS = [
-    ("Datadog",  "What has Datadog's CEO Olivier Pomel said recently about their AI strategy?"),
-    ("Clari",    "What product announcements did Clari make in April 2026?"),
-    ("Boomi",    "What key partnerships has Boomi's CEO Steve Lucas been emphasizing?"),
-    ("Figma",    "Which markets are driving Figma's international growth?"),
-    ("Notion",   "What are Notion's new enterprise features?"),
-    ("Gong",     "Can you explain Gong's AI Deep Researcher feature?"),
+    ("Datadog", "What has Datadog's CEO Olivier Pomel said recently about their AI strategy?"),
+    ("Clari",   "What product announcements did Clari make in April 2026?"),
+    ("Boomi",   "What key partnerships has Boomi's CEO Steve Lucas been emphasizing?"),
+    ("Figma",   "Which markets are driving Figma's international growth?"),
+    ("Notion",  "What are Notion's new enterprise features?"),
+    ("Gong",    "Can you explain Gong's AI Deep Researcher feature?"),
 ]
 
 # ── session state ─────────────────────────────────────────────────────────────
@@ -304,7 +282,7 @@ for msg in st.session_state.messages:
         if msg.get("meta"):
             st.markdown(f'<div class="meta">{msg["meta"]}</div>', unsafe_allow_html=True)
 
-# ── resolve prompt (typed or clicked) ─────────────────────────────────────────
+# ── resolve prompt (typed or clicked) ────────────────────────────────────────
 typed = st.chat_input("ask about any company…")
 prompt = typed or st.session_state.pending_question
 if st.session_state.pending_question:
@@ -316,22 +294,18 @@ if prompt:
 
     history = [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
 
-    # If previous assistant message was asking for a company, reconstruct the full question
-    # e.g. user asked "explain AI Deep Researcher", agent asked "which company?", user said "Gong"
+    # If the agent just asked "which company?", stitch original question + company clarification together
     effective_prompt = prompt
     if (len(history) >= 2
             and history[-1]["role"] == "assistant"
-            and "which company" in history[-1]["content"].lower()
-            and len(history) >= 2):
-        original_question = history[-2]["content"]
-        effective_prompt = f"{original_question} (company: {prompt})"
+            and "which company" in history[-1]["content"].lower()):
+        effective_prompt = f"{history[-2]['content']} (company: {prompt})"
 
     with st.chat_message("assistant"):
         with st.status("Searching external signals…", expanded=True) as status:
             t0 = time.time()
 
             company = extract_company(effective_prompt, history, status)
-
             if company == "Unknown" and st.session_state.last_company:
                 company = st.session_state.last_company
             elif company != "Unknown":
@@ -348,13 +322,12 @@ if prompt:
                 gc = d.get("growth_context", "Unknown")
 
                 tool_output, credits = run_search(company, mode, topic, gc, status)
-
                 reply = respond(company, effective_prompt, tool_output, history, status)
                 elapsed = time.time() - t0
 
                 credit_label = f"{credits} credit{'s' if credits != 1 else ''}"
                 status.update(
-                    label=f"✓ {company} · {mode} search · {credit_label} · {elapsed:.1f}s",
+                    label=f"✓ {company} · {mode} · {credit_label} · {elapsed:.1f}s",
                     state="complete",
                     expanded=False,
                 )
