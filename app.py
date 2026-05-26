@@ -73,20 +73,17 @@ st.markdown("""
 
 # ── header ────────────────────────────────────────────────────────────────────
 st.markdown("# External Signals — Test Agent")
-col1, col2 = st.columns([8, 1])
-with col1:
-    st.markdown('<div class="subtitle">Property of QuadSci</div>', unsafe_allow_html=True)
-with col2:
-    with st.popover("ℹ️ info"):
-        st.markdown(
-            "**Search:** Tavily web search — basic (1 credit) for specific questions, "
-            "advanced (2 credits/query) for open-ended.\n\n"
-            "**Routing:** GPT-5.4 decides search mode based on your question.\n\n"
-            "**Response:** GPT-5.4 synthesizes results through a CS lens.\n\n"
-            "**Flow:** identify company → search → respond. "
-            "History is kept so follow-ups work naturally.\n\n"
-            "_Test agent — results from public web data only._"
-        )
+st.markdown('<div class="subtitle">Property of QuadSci</div>', unsafe_allow_html=True)
+with st.popover("ℹ️  info", use_container_width=False):
+    st.markdown(
+        "**Search:** Tavily web search API\n\n"
+        "- **1 credit** — basic depth, 1 focused query (specific questions)\n"
+        "- **2 credits** — advanced depth, 1 query (moderately specific)\n"
+        "- **4 credits** — advanced depth, 2 parallel queries (open-ended)\n\n"
+        "**Routing:** GPT-5.4 picks the search tier based on your question.\n\n"
+        "**Response:** GPT-5.4 synthesizes results through a CS lens.\n\n"
+        "_Test agent — public web data only._"
+    )
 
 # ── clients ───────────────────────────────────────────────────────────────────
 @st.cache_resource
@@ -151,6 +148,7 @@ def _fmt(resp):
 def run_search(company, search_mode, topic, growth_context, log):
     years = _year_window()
 
+    # 1 credit — basic depth, 1 focused query
     if search_mode == "basic" and topic:
         query = f'"{company}" {topic} {years}'
         log.write(f"basic search · {query}")
@@ -160,24 +158,34 @@ def run_search(company, search_mode, topic, growth_context, log):
         log.write(f"{len(resp.get('results', []))} results · 1 credit · {elapsed:.1f}s")
         return _fmt(resp), 1
 
+    # 2 credits — advanced depth, 1 query
+    if search_mode == "advanced" and topic:
+        query = f'"{company}" {topic} {years}'
+        log.write(f"advanced search · {query}")
+        t0 = time.time()
+        resp = _search(query, "advanced", max_results=6)
+        elapsed = time.time() - t0
+        log.write(f"{len(resp.get('results', []))} results · 2 credits · {elapsed:.1f}s")
+        return _fmt(resp), 2
+
+    # 4 credits — advanced depth, 2 parallel queries
     query_set = pick_query_set(growth_context)
     queries = [(lbl, tmpl.format(company=company, years=years)) for lbl, tmpl in query_set.items()]
-    log.write(f"advanced search · {len(queries)} parallel queries")
+    log.write(f"broad search · {len(queries)} parallel queries")
     t0 = time.time()
     with ThreadPoolExecutor(max_workers=2) as ex:
         futures = [ex.submit(_search, q, "advanced", 4) for _, q in queries]
         responses = [f.result() for f in futures]
     elapsed = time.time() - t0
-    credits = len(queries) * 2
     total_results = sum(len(r.get("results", [])) for r in responses)
-    log.write(f"{total_results} results · {credits} credits · {elapsed:.1f}s")
+    log.write(f"{total_results} results · 4 credits · {elapsed:.1f}s")
 
     sections = [
         f"── {lbl.replace('_', ' ').title()} ──\n{_fmt(r)}"
         for (lbl, _), r in zip(queries, responses)
         if _fmt(r)
     ]
-    return "\n\n".join(sections), credits
+    return "\n\n".join(sections), 4
 
 # ── LLM calls ────────────────────────────────────────────────────────────────
 def extract_company(question, history, log):
@@ -212,8 +220,11 @@ def decide(company, question, history, log):
         messages=[
             {"role": "system", "content": (
                 "You are a routing agent. Given a company, question, and recent conversation, decide:\n"
-                "1. search_mode: 'basic' (specific topic) or 'advanced' (open-ended, broad)\n"
-                "2. topic: if basic, a short search phrase. Empty if advanced.\n"
+                "1. search_mode — pick one:\n"
+                "   'basic': very specific question with a clear topic (e.g. 'did they raise funding?', 'any layoffs?') → 1 credit\n"
+                "   'advanced': moderately specific follow-up or named topic needing depth (e.g. 'tell me about their AI strategy', 'what happened with their CEO?') → 2 credits\n"
+                "   'broad': open-ended, no specific topic (e.g. 'what's happening at X?', 'any news?') → 4 credits\n"
+                "2. topic: for basic/advanced, a short search phrase. Empty if broad.\n"
                 "3. growth_context: 'High Growth', 'Medium Growth', 'Stable', 'Contraction', or 'Unknown'.\n"
                 "Respond in JSON only: {\"search_mode\": ..., \"topic\": \"...\", \"growth_context\": \"...\"}"
             )},
