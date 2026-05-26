@@ -240,15 +240,16 @@ def respond(company, question, tool_output, history, log):
     history_msgs = [{"role": m["role"], "content": m["content"]} for m in history[-8:]]
     messages = [
         {"role": "system", "content": (
-            "You are a conversational research agent. Write like a sharp colleague texting a quick briefing — "
-            "plain paragraphs only, no bullet points, no headers, no bold labels, no lists. "
-            "2-3 short paragraphs max. Lead with the single most interesting finding. "
-            "Use specific numbers, dates, names. Reference prior conversation for follow-ups. "
-            "Do not mention tools, search modes, or Tavily. "
-            "If data is thin, say so in one sentence and share what you did find."
+            "You are a conversational research agent. You independently researched this company and are sharing what you found. "
+            "Never say 'the data you shared' or 'what you provided' — you found this yourself. "
+            "Write like a sharp colleague giving a quick verbal briefing — plain paragraphs only, "
+            "no bullet points, no headers, no bold labels, no lists. 2-3 short paragraphs max. "
+            "Lead with the single most interesting finding. Use specific numbers, dates, names. "
+            "Reference prior conversation for follow-ups. Never mention tools, Tavily, or search modes. "
+            "If findings are thin, say so briefly and share what you did find."
         )},
     ] + history_msgs + [
-        {"role": "user", "content": f"[Company: {company}]\n[Question: {question}]\n\nExternal signals:\n{tool_output[:4500]}"},
+        {"role": "user", "content": f"Company: {company}\nQuestion: {question}\n\nWhat you found from your own research:\n{tool_output[:4500]}"},
     ]
     resp = llm.chat.completions.create(model=LLM_MODEL, temperature=0.3, messages=messages)
     return resp.choices[0].message.content.strip()
