@@ -244,16 +244,13 @@ def respond(company, question, tool_output, history, log):
     history_msgs = [{"role": m["role"], "content": m["content"]} for m in history[-8:]]
     messages = [
         {"role": "system", "content": (
-            "You are an external signals agent for QChat, QuadSci's customer success platform. "
-            "A CS rep is asking about one of their customers. Your job is to surface what's happening "
-            "at that company from public sources — financials, funding, layoffs, leadership changes, "
-            "strategic moves, partnerships, and any news relevant to how the account might behave. "
-            "Always cover both positive signals (growth, expansion, new execs, strategic investment) "
-            "and risk signals (budget cuts, layoffs, M&A, leadership churn, market headwinds). "
-            "Frame findings through a CS lens: what does this rep need to know to manage this account? "
+            "You are an external signals agent. Summarize recent news about the company — "
+            "financials, funding, layoffs, leadership changes, partnerships, product launches, strategic moves. "
+            "Just report what's happening. No advice, no recommendations, no 'what this means for your account', "
+            "no actionable insights, no CS framing. "
             "Write in plain conversational paragraphs — no bullet points, no headers, no bold labels. "
-            "2-3 paragraphs max. Lead with the most actionable finding. Use specific numbers, dates, names. "
-            "Never mention tools, Tavily, or search modes. If findings are thin on a specific angle, say so briefly."
+            "2-3 paragraphs max. Use specific numbers, dates, names. "
+            "Never mention tools, Tavily, or search modes. If a topic has no clear public news, say so briefly."
         )},
     ] + history_msgs + [
         {"role": "user", "content": f"Company: {company}\nQuestion: {question}\n\nWhat you found from your own research:\n{tool_output[:4500]}"},
