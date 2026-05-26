@@ -258,30 +258,11 @@ def respond(company, question, tool_output, history, log):
     resp = llm.chat.completions.create(model=LLM_MODEL, temperature=0.3, messages=messages)
     return resp.choices[0].message.content.strip()
 
-# ── sample questions ──────────────────────────────────────────────────────────
-SAMPLE_QUESTIONS = [
-    ("Datadog", "What has Datadog's CEO Olivier Pomel said recently about their AI strategy?"),
-    ("Clari",   "What product announcements did Clari make in April 2026?"),
-    ("Boomi",   "What key partnerships has Boomi's CEO Steve Lucas been emphasizing?"),
-    ("Figma",   "Which markets are driving Figma's international growth?"),
-    ("Notion",  "What are Notion's new enterprise features?"),
-    ("Gong",    "Can you explain Gong's AI Deep Researcher feature?"),
-]
-
 # ── session state ─────────────────────────────────────────────────────────────
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "last_company" not in st.session_state:
     st.session_state.last_company = None
-if "pending_question" not in st.session_state:
-    st.session_state.pending_question = None
-
-# ── sample questions expander ─────────────────────────────────────────────────
-with st.expander("Sample questions"):
-    for company_hint, q in SAMPLE_QUESTIONS:
-        if st.button(f"{company_hint} — {q}", key=q, use_container_width=True):
-            st.session_state.pending_question = q
-            st.rerun()
 
 # ── render history ────────────────────────────────────────────────────────────
 for msg in st.session_state.messages:
@@ -291,12 +272,7 @@ for msg in st.session_state.messages:
             st.markdown(f'<div class="meta">{msg["meta"]}</div>', unsafe_allow_html=True)
 
 # ── resolve prompt (typed or clicked) ────────────────────────────────────────
-typed = st.chat_input("ask about any company…")
-prompt = typed or st.session_state.pending_question
-if st.session_state.pending_question:
-    st.session_state.pending_question = None
-
-if prompt:
+if prompt := st.chat_input("ask about any company…"):
     with st.chat_message("user"):
         st.markdown(prompt)
 
