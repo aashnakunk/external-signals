@@ -300,11 +300,21 @@ if prompt:
 
     history = [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
 
+    # If previous assistant message was asking for a company, reconstruct the full question
+    # e.g. user asked "explain AI Deep Researcher", agent asked "which company?", user said "Gong"
+    effective_prompt = prompt
+    if (len(history) >= 2
+            and history[-1]["role"] == "assistant"
+            and "which company" in history[-1]["content"].lower()
+            and len(history) >= 2):
+        original_question = history[-2]["content"]
+        effective_prompt = f"{original_question} (company: {prompt})"
+
     with st.chat_message("assistant"):
         with st.status("Searching external signals…", expanded=True) as status:
             t0 = time.time()
 
-            company = extract_company(prompt, history, status)
+            company = extract_company(effective_prompt, history, status)
 
             if company == "Unknown" and st.session_state.last_company:
                 company = st.session_state.last_company
@@ -316,14 +326,14 @@ if prompt:
                 reply = "Which company are you asking about?"
                 meta = ""
             else:
-                d = decide(company, prompt, history, status)
+                d = decide(company, effective_prompt, history, status)
                 mode = d.get("search_mode", "advanced")
                 topic = d.get("topic", "")
                 gc = d.get("growth_context", "Unknown")
 
                 tool_output, credits = run_search(company, mode, topic, gc, status)
 
-                reply = respond(company, prompt, tool_output, history, status)
+                reply = respond(company, effective_prompt, tool_output, history, status)
                 elapsed = time.time() - t0
 
                 credit_label = f"{credits} credit{'s' if credits != 1 else ''}"
