@@ -276,24 +276,31 @@ if prompt := st.chat_input("ask about any company…"):
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    history = [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
+    full_history = [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
 
     # If the agent just asked "which company?", stitch original question + company clarification together
     effective_prompt = prompt
-    if (len(history) >= 2
-            and history[-1]["role"] == "assistant"
-            and "which company" in history[-1]["content"].lower()):
-        effective_prompt = f"{history[-2]['content']} (company: {prompt})"
+    if (len(full_history) >= 2
+            and full_history[-1]["role"] == "assistant"
+            and "which company" in full_history[-1]["content"].lower()):
+        effective_prompt = f"{full_history[-2]['content']} (company: {prompt})"
 
     with st.chat_message("assistant"):
         with st.status("Searching external signals…", expanded=True) as status:
             t0 = time.time()
 
-            company = extract_company(effective_prompt, history, status)
+            company = extract_company(effective_prompt, full_history, status)
             if company == "Unknown" and st.session_state.last_company:
                 company = st.session_state.last_company
             elif company != "Unknown":
                 st.session_state.last_company = company
+
+            # only pass history relevant to the current company to avoid cross-company confusion
+            history = [
+                {"role": m["role"], "content": m["content"]}
+                for m in st.session_state.messages
+                if m.get("company", "").lower() == company.lower()
+            ]
 
             if company == "Unknown":
                 status.update(label="Couldn't identify a company", state="error")
@@ -321,5 +328,5 @@ if prompt := st.chat_input("ask about any company…"):
         if meta:
             st.markdown(f'<div class="meta">{meta}</div>', unsafe_allow_html=True)
 
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    st.session_state.messages.append({"role": "assistant", "content": reply, "meta": meta})
+    st.session_state.messages.append({"role": "user", "content": prompt, "company": company})
+    st.session_state.messages.append({"role": "assistant", "content": reply, "meta": meta, "company": company})
