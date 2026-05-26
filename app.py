@@ -29,6 +29,22 @@ st.markdown("""
        font-size: 1.15rem !important; letter-spacing: 0.04em; margin-bottom: 0 !important; }
   .subtitle { color: #8b949e; font-family: monospace; font-size: 0.76rem; margin-bottom: 1.5rem; }
 
+  /* hide default avatars */
+  [data-testid="chatAvatarIcon-user"] svg,
+  [data-testid="chatAvatarIcon-user"] img,
+  [data-testid="chatAvatarIcon-assistant"] svg,
+  [data-testid="chatAvatarIcon-assistant"] img { display: none !important; }
+
+  /* text labels instead */
+  [data-testid="chatAvatarIcon-user"]::after {
+    content: "you"; color: #58a6ff;
+    font-family: 'SF Mono', monospace; font-size: 0.75rem; font-weight: 600;
+  }
+  [data-testid="chatAvatarIcon-assistant"]::after {
+    content: "agent"; color: #3fb950;
+    font-family: 'SF Mono', monospace; font-size: 0.75rem; font-weight: 600;
+  }
+
   /* user bubble */
   [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) .stMarkdown p {
     color: #e6edf3; font-family: 'SF Mono', monospace; font-size: 0.87rem;
