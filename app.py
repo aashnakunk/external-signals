@@ -72,8 +72,16 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ── header ────────────────────────────────────────────────────────────────────
-st.markdown("# External Signals — Test Agent")
-st.markdown('<div class="subtitle">Property of QuadSci</div>', unsafe_allow_html=True)
+col_title, col_bin = st.columns([9, 1])
+with col_title:
+    st.markdown("# External Signals — Test Agent")
+    st.markdown('<div class="subtitle">Property of QuadSci</div>', unsafe_allow_html=True)
+with col_bin:
+    if st.button("🗑️", help="Clear conversation", use_container_width=True):
+        st.session_state.messages = []
+        st.session_state.last_company = None
+        st.rerun()
+
 with st.popover("ℹ️  info", use_container_width=False):
     st.markdown(
         "**Search:** Tavily web search API\n\n"
