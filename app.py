@@ -154,21 +154,19 @@ def run_search(company, search_mode, topic, growth_context, log):
 
     if search_mode == "basic" and topic:
         query = f'"{company}" {topic} {years}'
-        log.write(f"🔍 **Basic search** (1 credit)\n`{query}`")
+        log.write(f"basic search · {query}")
         t0 = time.time()
         resp = _search(query, "basic", max_results=6)
         elapsed = time.time() - t0
         n = len(resp.get("results", []))
         total_credits = 1
-        log.write(f"↳ {n} results in {elapsed:.1f}s · 1 credit used")
+        log.write(f"{n} results · 1 credit · {elapsed:.1f}s")
         return _fmt(resp), total_credits
 
     else:
         query_set = pick_query_set(growth_context)
         queries = [(lbl, tmpl.format(company=company, years=years)) for lbl, tmpl in query_set.items()]
-        log.write(f"🔍 **Advanced search** (2 credits/query · {len(queries)} parallel queries)")
-        for lbl, q in queries:
-            log.write(f"`{lbl}:` {q}")
+        log.write(f"advanced search · {len(queries)} parallel queries")
         t0 = time.time()
         with ThreadPoolExecutor(max_workers=2) as ex:
             futures = [ex.submit(_search, q, "advanced", 4) for _, q in queries]
@@ -176,7 +174,7 @@ def run_search(company, search_mode, topic, growth_context, log):
         elapsed = time.time() - t0
         total_credits = len(queries) * 2
         total_results = sum(len(r.get("results", [])) for r in responses)
-        log.write(f"↳ {total_results} results across {len(queries)} queries in {elapsed:.1f}s · {total_credits} credits used")
+        log.write(f"{total_results} results · {total_credits} credits · {elapsed:.1f}s")
 
         sections = []
         for (lbl, _), r in zip(queries, responses):
@@ -191,7 +189,7 @@ def decide(company, question, history, log):
         f"{'User' if m['role']=='user' else 'Agent'}: {m['content'][:200]}"
         for m in history[-6:]
     )
-    log.write("🤖 Deciding search strategy...")
+    log.write("deciding search strategy...")
     resp = llm.chat.completions.create(
         model=LLM_MODEL, temperature=0,
         messages=[
@@ -213,7 +211,7 @@ def decide(company, question, history, log):
     mode = d.get("search_mode", "advanced")
     topic = d.get("topic", "")
     gc = d.get("growth_context", "Unknown")
-    log.write(f"↳ mode: **{mode}** · topic: `{topic or '—'}` · growth context: {gc}")
+    log.write(f"mode: {mode} · topic: {topic or '—'}")
     return d
 
 def extract_company(question, history, log):
@@ -221,7 +219,7 @@ def extract_company(question, history, log):
         f"{'User' if m['role']=='user' else 'Agent'}: {m['content'][:300]}"
         for m in history[-4:]
     )
-    log.write("🏢 Identifying company...")
+    log.write("identifying company...")
     resp = llm.chat.completions.create(
         model=LLM_MODEL, temperature=0,
         messages=[
@@ -234,11 +232,11 @@ def extract_company(question, history, log):
         ],
     )
     company = resp.choices[0].message.content.strip()
-    log.write(f"↳ {company}")
+    log.write(company)
     return company
 
 def respond(company, question, tool_output, history, log):
-    log.write("✍️ Generating response...")
+    log.write("generating response...")
     history_msgs = [{"role": m["role"], "content": m["content"]} for m in history[-8:]]
     messages = [
         {"role": "system", "content": (
