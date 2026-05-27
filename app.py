@@ -98,12 +98,13 @@ with st.popover("ℹ️  info", use_container_width=False):
 def get_clients():
     tv_key = os.environ.get("TAVILY_API_KEY") or st.secrets.get("TAVILY_API_KEY", "")
     oa_key = os.environ.get("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY", "")
-    return TavilyClient(api_key=tv_key), OpenAI(api_key=oa_key)
+    return TavilyClient(api_key=tv_key), OpenAI(api_key=oa_key, max_retries=3)
 
 tavily, llm = get_clients()
 
 LLM_MODEL = "gpt-5.4"
 RECENCY_DAYS = 180
+TAVILY_TIMEOUT = 30
 
 # ── query templates ───────────────────────────────────────────────────────────
 def _year_window():
@@ -133,11 +134,15 @@ def pick_query_set(growth_context):
 
 # ── Tavily ────────────────────────────────────────────────────────────────────
 def _search(query, depth, max_results=5):
-    try:
-        return tavily.search(query=query, search_depth=depth,
-                             max_results=max_results, include_answer=True, days=RECENCY_DAYS)
-    except Exception:
-        return {"answer": "", "results": []}
+    for attempt in range(3):
+        try:
+            return tavily.search(query=query, search_depth=depth,
+                                 max_results=max_results, include_answer=True,
+                                 days=RECENCY_DAYS, timeout=TAVILY_TIMEOUT)
+        except Exception:
+            if attempt == 2:
+                return {"answer": "", "results": []}
+            time.sleep(2 ** attempt)  # 1s, 2s
 
 def _fmt(resp):
     parts = []
@@ -207,18 +212,21 @@ def extract_company(question, history, log):
         for m in history[-4:]
     )
     log.write("identifying company...")
-    resp = llm.chat.completions.create(
-        model=LLM_MODEL, temperature=0,
-        messages=[
-            {"role": "system", "content": (
-                "Extract the company the user is asking about. "
-                "If it's a follow-up with no new company named, infer from conversation. "
-                "Reply with ONLY the company name. If truly unknown reply 'Unknown'."
-            )},
-            {"role": "user", "content": f"Question: {question}\n\nConversation:\n{history_txt}"},
-        ],
-    )
-    company = resp.choices[0].message.content.strip()
+    try:
+        resp = llm.chat.completions.create(
+            model=LLM_MODEL, temperature=0,
+            messages=[
+                {"role": "system", "content": (
+                    "Extract the company the user is asking about. "
+                    "If it's a follow-up with no new company named, infer from conversation. "
+                    "Reply with ONLY the company name. If truly unknown reply 'Unknown'."
+                )},
+                {"role": "user", "content": f"Question: {question}\n\nConversation:\n{history_txt}"},
+            ],
+        )
+        company = resp.choices[0].message.content.strip()
+    except Exception:
+        company = "Unknown"
     log.write(company)
     return company
 
@@ -228,26 +236,29 @@ def decide(company, question, history, log):
         for m in history[-6:]
     )
     log.write("deciding search strategy...")
-    resp = llm.chat.completions.create(
-        model=LLM_MODEL, temperature=0,
-        messages=[
-            {"role": "system", "content": (
-                "You are a routing agent. Given a company, question, and recent conversation, decide:\n"
-                "1. search_mode — pick one:\n"
-                "   'basic': very specific question with a clear topic (e.g. 'did they raise funding?', 'any layoffs?') → 1 credit\n"
-                "   'advanced': moderately specific follow-up or named topic needing depth (e.g. 'tell me about their AI strategy', 'what happened with their CEO?') → 2 credits\n"
-                "   'broad': open-ended, no specific topic (e.g. 'what's happening at X?', 'any news?') → 4 credits\n"
-                "2. topic: for basic/advanced, a short search phrase. Empty if broad.\n"
-                "3. growth_context: 'High Growth', 'Medium Growth', 'Stable', 'Contraction', or 'Unknown'.\n"
-                "Respond in JSON only: {\"search_mode\": ..., \"topic\": \"...\", \"growth_context\": \"...\"}"
-            )},
-            {"role": "user", "content": f"Company: {company}\nQuestion: {question}\n\nRecent conversation:\n{history_txt}"},
-        ],
-    )
-    raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", resp.choices[0].message.content.strip())
     try:
-        d = json.loads(raw)
-    except json.JSONDecodeError:
+        resp = llm.chat.completions.create(
+            model=LLM_MODEL, temperature=0,
+            messages=[
+                {"role": "system", "content": (
+                    "You are a routing agent. Given a company, question, and recent conversation, decide:\n"
+                    "1. search_mode — pick one:\n"
+                    "   'basic': very specific question with a clear topic (e.g. 'did they raise funding?', 'any layoffs?') → 1 credit\n"
+                    "   'advanced': moderately specific follow-up or named topic needing depth (e.g. 'tell me about their AI strategy', 'what happened with their CEO?') → 2 credits\n"
+                    "   'broad': open-ended, no specific topic (e.g. 'what's happening at X?', 'any news?') → 4 credits\n"
+                    "2. topic: for basic/advanced, a short search phrase. Empty if broad.\n"
+                    "3. growth_context: 'High Growth', 'Medium Growth', 'Stable', 'Contraction', or 'Unknown'.\n"
+                    "Respond in JSON only: {\"search_mode\": ..., \"topic\": \"...\", \"growth_context\": \"...\"}"
+                )},
+                {"role": "user", "content": f"Company: {company}\nQuestion: {question}\n\nRecent conversation:\n{history_txt}"},
+            ],
+        )
+        raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", resp.choices[0].message.content.strip())
+        try:
+            d = json.loads(raw)
+        except json.JSONDecodeError:
+            d = {"search_mode": "advanced", "topic": "", "growth_context": "Unknown"}
+    except Exception:
         d = {"search_mode": "advanced", "topic": "", "growth_context": "Unknown"}
     log.write(f"mode: {d.get('search_mode', 'advanced')} · topic: {d.get('topic') or '—'}")
     return d
@@ -268,8 +279,11 @@ def respond(company, question, tool_output, history, log):
     ] + history_msgs + [
         {"role": "user", "content": f"Company: {company}\nQuestion: {question}\n\nWhat you found from your own research:\n{tool_output[:4500]}"},
     ]
-    resp = llm.chat.completions.create(model=LLM_MODEL, temperature=0.3, messages=messages)
-    return resp.choices[0].message.content.strip()
+    try:
+        resp = llm.chat.completions.create(model=LLM_MODEL, temperature=0.3, messages=messages)
+        return resp.choices[0].message.content.strip()
+    except Exception:
+        return "The response couldn't be generated right now — the AI service may be temporarily unavailable. Please try again in a moment."
 
 # ── session state ─────────────────────────────────────────────────────────────
 if "messages" not in st.session_state:
