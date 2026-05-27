@@ -133,8 +133,11 @@ def pick_query_set(growth_context):
 
 # ── Tavily ────────────────────────────────────────────────────────────────────
 def _search(query, depth, max_results=5):
-    return tavily.search(query=query, search_depth=depth,
-                         max_results=max_results, include_answer=True, days=RECENCY_DAYS)
+    try:
+        return tavily.search(query=query, search_depth=depth,
+                             max_results=max_results, include_answer=True, days=RECENCY_DAYS)
+    except Exception:
+        return {"answer": "", "results": []}
 
 def _fmt(resp):
     parts = []
@@ -163,8 +166,9 @@ def run_search(company, search_mode, topic, growth_context, log):
         t0 = time.time()
         resp = _search(query, "basic", max_results=6)
         elapsed = time.time() - t0
+        result = _fmt(resp)
         log.write(f"{len(resp.get('results', []))} results · 1 credit · {elapsed:.1f}s")
-        return _fmt(resp), 1
+        return result or "No results found — search may be temporarily unavailable.", 1
 
     # 2 credits — advanced depth, 1 query
     if search_mode == "advanced" and topic:
@@ -173,8 +177,9 @@ def run_search(company, search_mode, topic, growth_context, log):
         t0 = time.time()
         resp = _search(query, "advanced", max_results=6)
         elapsed = time.time() - t0
+        result = _fmt(resp)
         log.write(f"{len(resp.get('results', []))} results · 2 credits · {elapsed:.1f}s")
-        return _fmt(resp), 2
+        return result or "No results found — search may be temporarily unavailable.", 2
 
     # 4 credits — advanced depth, 2 parallel queries
     query_set = pick_query_set(growth_context)
@@ -193,7 +198,7 @@ def run_search(company, search_mode, topic, growth_context, log):
         for (lbl, _), r in zip(queries, responses)
         if _fmt(r)
     ]
-    return "\n\n".join(sections), 4
+    return "\n\n".join(sections) or "No results found — search may be temporarily unavailable.", 4
 
 # ── LLM calls ────────────────────────────────────────────────────────────────
 def extract_company(question, history, log):
