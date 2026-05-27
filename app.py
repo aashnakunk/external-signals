@@ -71,6 +71,26 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# ── auth ──────────────────────────────────────────────────────────────────────
+def _check_password():
+    if st.session_state.get("authenticated"):
+        return True
+    with st.form("auth_form"):
+        st.markdown("### External Signals · QuadSci")
+        pwd = st.text_input("Password", type="password", placeholder="enter password")
+        submitted = st.form_submit_button("Enter", use_container_width=True)
+    if submitted:
+        correct = st.secrets.get("APP_PASSWORD", "")
+        if correct and pwd == correct:
+            st.session_state.authenticated = True
+            st.rerun()
+        else:
+            st.error("Incorrect password.")
+    return False
+
+if not _check_password():
+    st.stop()
+
 # ── header ────────────────────────────────────────────────────────────────────
 col_title, col_bin = st.columns([9, 1])
 with col_title:
